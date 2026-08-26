@@ -1,0 +1,348 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=2.2cm,top=2.0cm,bottom=2.2cm]{geometry}
+\usepackage{mathpazo}\usepackage[T1]{fontenc}\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amssymb,booktabs,xcolor,titlesec,enumitem,array,longtable}
+\usepackage[hidelinks]{hyperref}
+
+\definecolor{ink}{HTML}{16211E}\definecolor{pine}{HTML}{1E5B4F}
+\definecolor{mulberry}{HTML}{8C3A56}\definecolor{slate}{HTML}{54655F}
+\definecolor{rulec}{HTML}{C6D2CD}\definecolor{boxbg}{HTML}{F4F7F6}
+\color{ink}\setlength{\parindent}{0pt}\setlength{\parskip}{0.45em}
+\renewcommand{\arraystretch}{1.15}
+
+\titleformat{\section}{\large\bfseries\color{pine}}{\thesection.}{0.55em}{}
+\titlespacing*{\section}{0pt}{1.5em}{0.5em}
+\titleformat{\subsection}{\bfseries}{}{0em}{}
+\titlespacing*{\subsection}{0pt}{0.9em}{0.3em}
+
+\newcommand{\lbl}[1]{{\color{slate}\ttfamily\footnotesize #1}}
+\newcommand{\qq}[1]{\textbf{\color{pine}#1}}
+\newenvironment{keybox}{\par\vspace{0.3em}\noindent
+  \begin{tabular}{|@{\hspace{9pt}}p{0.955\linewidth}@{\hspace{9pt}}|}\hline
+  \rule{0pt}{1.1em}}{\\[0.5em]\hline\end{tabular}\par\vspace{0.3em}}
+
+\begin{document}
+
+\begin{center}
+{\color{slate}\ttfamily\footnotesize IJF $\cdot$ LINK DISCOVERY}\\[0.5em]
+{\LARGE\bfseries The FAV 13 Pipeline}\\[0.5em]
+{\color{slate}\small Finding government contracts that look like favouritism.\\
+Every step, every formula, and the numbers at each stage.}
+\end{center}
+
+\vspace{0.8em}
+
+%======================================================================
+\section*{The question in one sentence}
+
+\begin{keybox}
+A company lobbies a government department. Soon after, \textbf{that same department}
+awards it a contract, often without competition. We rank all contracts by how much they
+look like this, so a reporter checks the most promising first.
+\end{keybox}
+
+The output is a \textbf{lead to verify}, never an accusation.
+
+%======================================================================
+\section*{The numbers, at a glance}
+
+\begin{center}\small
+\begin{tabular}{@{}lr@{}}
+\toprule
+\textbf{Question} & \textbf{Answer} \\
+\midrule
+Records --- lobbying registrations       & 245{,}462 \\
+Records --- procurement contracts        & 1{,}517{,}619 \\
+\quad \textbf{total records}             & \textbf{1{,}763{,}081} \\
+\addlinespace
+Distinct company names --- lobbying side & 33{,}574 \\
+Distinct company names --- supplier side & 251{,}885 \\
+\quad union of both                      & 283{,}827 \\
+\addlinespace
+Entities (clusters) --- lobbying side    & 23{,}648 \\
+Entities (clusters) --- supplier side    & 132{,}319 \\
+\quad union                              & 151{,}734 \\
+\quad \textbf{on BOTH sides (linkable)}  & \textbf{4{,}233} \\
+\addlinespace
+Motif instances scored                   & 1{,}497{,}648 \\
+\quad with a lobbying channel            & 136{,}583 \quad (9.1\%) \\
+\quad non-competitive                    & 304{,}516 \quad (20.3\%) \\
+\quad \textbf{both --- the core motif}   & \textbf{31{,}168} \quad (2.1\%) \\
+\quad both, within 90 days               & 11{,}406 \\
+\addlinespace
+Features in the scoring function         & 9 \\
+$k$ in the final output                  & see \S8 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{keybox}
+\textbf{Read the entity numbers carefully.} 283{,}827 company names collapse to 151{,}734
+entities --- but only \textbf{4{,}233} appear on \emph{both} sides. Only those can ever
+form a lobbying-to-contract link. That is 2.8\% of all entities, and it is the ceiling on
+what this method can find.
+\end{keybox}
+
+%======================================================================
+\section{Entity resolution --- messy names to one company}
+
+\subsection*{What happens}
+The same company is written many ways. We decide which spellings are one company.
+
+\begin{center}\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+\texttt{"ACCENTURE INC"} & in a contract \\
+\texttt{"Accenture Inc."} & in another contract \\
+\texttt{"Accenture Canada"} & in a lobbying registration \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection*{Method}
+Union--find over two manual columns, \texttt{cluster\_id} and \texttt{canonical\_id},
+treating both as equivalence relations. Then each group is \emph{split back apart} where
+its members are distinct registered names.
+
+\subsection*{The one rule we never break}
+A parent company and its subsidiary stay \textbf{separate}. If a parent lobbies and a
+subsidiary wins, merging them would manufacture a loop that does not exist ---
+a fabricated accusation. This costs about 11\% of identity edges and is worth it.
+
+\subsection*{Result}
+283{,}827 names $\rightarrow$ 151{,}734 entities. Accenture alone has 12 spellings.
+
+%======================================================================
+\section{Motif construction --- linking a contract to prior lobbying}
+
+\subsection*{What happens}
+One row per contract. For each contract, look backwards for lobbying of
+\textbf{the department that gave that contract}.
+
+\subsection*{The rule that matters}
+\begin{center}\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+lobbied \emph{Health Canada}, won a \emph{Defence} contract & \textcolor{mulberry}{does not count} \\
+lobbied \emph{ESDC}, won an \emph{ESDC} contract & \textcolor{pine}{counts} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Without this, every large company looks guilty --- a busy firm lobbies someone every week.
+
+\subsection*{Formula}
+\begin{center}\ttfamily\small
+gap = smallest of ( award date $-$ last registration of that department before it )\\[2pt]
+gap = infinity if the company never lobbied any of them beforehand
+\end{center}
+
+\subsection*{Result}
+1{,}497{,}648 motif instances. Only \textbf{136{,}583 (9.1\%)} have a lobbying channel
+at all --- the other 91\% are contracts with no prior lobbying of that buyer.
+
+%======================================================================
+\section{Feature extraction --- turning facts into ``how unusual''}
+
+Each signal is compared against \emph{its own} normal. Sole-sourcing means nothing at a
+department that always sole-sources.
+
+\subsection*{Timing}
+\emph{Scatter this company's registrations randomly across the calendar, following the
+national pattern of when lobbying happens. How likely is at least one to land within
+\texttt{gap} days before this contract?}
+
+\begin{center}\ttfamily\small
+p\_time = 1 $-$ (1 $-$ Q) \^{} n\\[3pt]
+\normalfont\rmfamily
+\begin{tabular}{@{}ll@{}}
+n & times this company registered to lobby \emph{this} department \\
+Q & share of all 245{,}460 national lobbying dates in that window \\
+\end{tabular}
+\end{center}
+
+\subsection*{No competition}
+\begin{center}\ttfamily\small
+p\_comp = (k + 5 $\times$ 0.226) / (n + 5)\\[3pt]
+\normalfont\rmfamily
+\begin{tabular}{@{}ll@{}}
+k & that department's non-competitive contracts \\
+n & that department's total contracts \\
+0.226 & the national non-competitive rate \\
+\end{tabular}
+\end{center}
+The $+5$ stops a department with three contracts producing a spurious zero.
+
+\subsection*{Supplier dominance}
+\emph{If this department spread its contracts evenly across its suppliers, how likely is
+one supplier to hold this many?}
+\begin{center}\ttfamily\small
+p\_conc = P( X $\ge$ N ),\quad X $\sim$ Binomial( n , 1/m )\\[3pt]
+\normalfont\rmfamily
+\begin{tabular}{@{}ll@{}}
+N & contracts this supplier holds from that department \\
+n & that department's total contracts \\
+m & how many different suppliers it uses \\
+\end{tabular}
+\end{center}
+
+\subsection*{Tender window}
+\begin{center}\ttfamily\small
+p\_proc = share of all tenders whose window was this short or shorter
+\end{center}
+
+%======================================================================
+\section{The nine features and how each is built}
+
+Every feature is oriented so that \textbf{larger = more suspicious}. That orientation is
+what makes the score monotone, which is what step 6 requires.
+
+\begin{center}\footnotesize
+\begin{tabular}{@{}p{2.9cm}p{5.1cm}p{7.4cm}@{}}
+\toprule
+\textbf{Feature} & \textbf{Built from} & \textbf{Construction} \\
+\midrule
+\texttt{f\_recency} & the gap (step 2) &
+  $1/(1+\text{gap}/365)$ --- 0 if no lobbying \\
+\texttt{f\_time\_excess} & \texttt{p\_time} &
+  $1-p_{\text{time}}$ \\
+\texttt{f\_channel} & registrations on this channel &
+  $\log(1+n)/\log(201)$, capped at 1 \\
+\texttt{f\_noncomp} & \texttt{pro\_award.method} &
+  1 if \texttt{NON}/\texttt{LIMITED}/\texttt{ADVANCE}, else 0 \\
+\texttt{f\_nc\_rarity} & \texttt{p\_comp} &
+  $1-p_{\text{comp}}$, only when non-competitive \\
+\texttt{f\_tender\_short} & \texttt{p\_proc} &
+  $1-p_{\text{proc}}$, 0 if no tender record \\
+\texttt{f\_dominance} & \texttt{p\_conc} &
+  $1-p_{\text{conc}}$ \\
+\texttt{f\_dep\_share} & entity $\times$ buyer counts &
+  this department's share of the supplier's whole book \\
+\texttt{f\_prominence} & entity total awards &
+  $\log(1+\text{awards})/\log(20001)$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{keybox}
+\textbf{Where the features come from.} Only \texttt{f\_noncomp} is a raw field copied from
+the data. Four are \emph{calibrated probabilities} computed against a reference population
+(\S3). Three are \emph{entity-level aggregates} --- counts rolled up per company or
+department. One (\texttt{f\_recency}) is a date arithmetic on the motif link itself.
+\end{keybox}
+
+\subsection*{What the learner actually used}
+\begin{center}\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Variant} & \textbf{Features given} & \textbf{Features actually used} \\
+\midrule
+v3   & 9 & \texttt{f\_prominence} 51\%, \texttt{f\_channel} 49\% \\
+v3b  & 8 & \texttt{f\_channel} 56\%, \texttt{f\_dominance} 44\% \\
+v3c  & 7 & \texttt{f\_dominance} 63\%, \texttt{f\_recency} 37\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+Every variant converges on about two features regardless of how many it is given.
+
+%======================================================================
+\section{Scoring}
+
+\subsection*{Two versions exist}
+
+\textbf{Hand-specified} (v2): the four probabilities are combined into one, then
+multiplied by an identity gate and a salience term.
+
+\textbf{Learned} (v3): monotone boosted stumps over the nine features.
+\begin{center}\ttfamily\small
+score = base + rate $\times$ ( rule$_1$ + rule$_2$ + $\dots$ + rule$_m$ )\\[3pt]
+each rule: \quad if feature $>$ threshold $\rightarrow$ add HIGH,\quad else add LOW\\[3pt]
+the constraint: \quad \textbf{HIGH $\ge$ LOW}
+\end{center}
+
+\subsection*{Why the constraint}
+Because \texttt{HIGH} $\ge$ \texttt{LOW}, every rule can only ever \emph{add}. Two
+consequences: the score is explainable (``it ranked higher \emph{because} it was
+sole-sourced''), and step 6 is only correct for a monotone score.
+
+%======================================================================
+\section{Top-$k$}
+
+Sort, take the best. A threshold algorithm can stop early --- once the $k$-th best score
+beats anything still unseen, the rest need never be scored.
+
+Rather than a bare score, the output can carry an expected error count:
+\begin{center}\ttfamily\small
+sort all p-values smallest first: p$_1 \le$ p$_2 \le \dots \le$ p$_n$\\[3pt]
+q at position i = smallest value of (n / j) $\times$ p$_j$ for any j $\ge$ i
+\end{center}
+Read as: \emph{of the top 20, expect about one to be coincidence.}
+
+\begin{keybox}
+\textbf{Honest note.} The threshold algorithm is implemented in \texttt{rank.py} but only
+ran in the superseded v1. Every current run performs a plain sort. At 1.5M rows that costs
+about a second, so nothing is lost --- but the paper should say ``Fagin's threshold
+algorithm'', not ``RankSQL'', which is a different thing and is not implemented.
+\end{keybox}
+
+%======================================================================
+\section{What is $k$?}
+
+There is no single $k$ --- the configured default and what each run actually wrote differ.
+
+\begin{center}\small
+\begin{tabular}{@{}llr@{}}
+\toprule
+\textbf{Where} & \textbf{File} & \textbf{$k$} \\
+\midrule
+\texttt{config.TOP\_K} (the default) & --- & 100 \\
+v1, company-level & \texttt{fav13\_topk.csv} & 50 \\
+v2, contract-level & \texttt{fav13\_v2\_top.csv} & 2{,}000 \\
+award-level run & \texttt{fav13\_awards\_topk.csv} & 2{,}000 \\
+v3, learned & \texttt{v3\_top.json} & 500 \\
+workbook & \texttt{favouritism\_models.xlsx} & 300 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{keybox}
+\textbf{$k$ should not be a free choice.} The right cut-off comes from the $q$-value: pick
+$k$ such that the expected number of coincidences among the top $k$ is what a reporter can
+afford to check. If they can review 20 leads and tolerate 1 wasted, $k$ follows from the
+data rather than from a round number.
+\end{keybox}
+
+%======================================================================
+\section*{The funnel, end to end}
+
+\begin{center}\small
+\begin{tabular}{@{}lrl@{}}
+\toprule
+\textbf{Stage} & \textbf{Count} & \textbf{Note} \\
+\midrule
+Records in                       & 1{,}763{,}081 & 245k registrations + 1.52M contracts \\
+Distinct company names           & 283{,}827 & across both sides \\
+Entities after resolution        & 151{,}734 & \\
+\quad on both sides              & 4{,}233 & the only ones that can link \\
+Motif instances scored           & 1{,}497{,}648 & one per contract \\
+\quad with a lobbying channel    & 136{,}583 & 9.1\% \\
+\quad and non-competitive        & 31{,}168 & 2.1\% --- the core motif \\
+\quad and within 90 days         & 11{,}406 & \\
+Handed to a reporter             & 20--300 & depends on $k$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+%======================================================================
+\section*{Two things to keep in view}
+
+\textbf{1. The best model is the simplest.} A two-line rule --- \emph{non-competitive,
+then most recent lobbying} --- ranks the known cases better (AUC 0.98) than either the
+calibrated combination (0.85) or the learned model (0.88).
+
+\textbf{2. Five known cases cannot separate those numbers.} 0.98, 0.91 and 0.88 sit inside
+each other's error bars at this sample size. The only defensible claim today is that
+\emph{something} beats ranking by company size (0.54). Choosing between the top models
+needs more verified cases, not more method.
+
+\end{document}

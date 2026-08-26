@@ -1,0 +1,10 @@
+case_id,person,category,resolution,appointee,apt_cos,apt_position,apt_org,apt_year,donor,don_cos,don_party,don_total,don_years,source_url
+GC001,Toni Varone,Patronage,resolved,Toni Varone,1.0,Director of the Board of Directors,Canada Lands Company Limited,2022,Toni Varone,1.0,Liberal Party of Canada,1675.0,2022-2022,https://www.cbc.ca/news/politics/senate-appointments-liberals-1.7260664
+GC002,Diana Piccoli,Patronage,appointee-only,Diana Piccoli,1.0,Judge,Superior Court of Justice of Ontario,,,0.634,,,,https://theijf.org/judge-liberal-party-donations
+GC003,Daryl Fridhandler,Patronage,donor-only,,0.851,,,,Daryl Fridhandler,1.0,Liberal Party of Canada,3170.9300000000003,2022-2022,https://www.cbc.ca/news/politics/alberta-senate-appointments-1.7310592
+GC007,Daniel Robert Pahl,Patronage,appointee-only,Daniel Robert Pahl,1.0,Judge,The Provincial Court of Alberta,2002,,0.615,,,,https://theijf.org/article/alberta-judges-donations
+GC008,Moe Sihota,Revolving Door,resolved,Moe Sihota,1.0,Chair,Environment and Land Use Committee,,Moe Sihota,1.0,BC NDP,0.0,2020-2022,https://theijf.org/article/former-bc-politicians-lobby-government-revolving-door
+GC009,Gordon Kenneth Hatch,Patronage,appointee-only,Gordon Kenneth Hatch,1.0,Judge,The Provincial Court of Alberta,2021,,0.603,,,,https://theijf.org/article/alberta-judges-donations
+GC013,Mohammad Al Zaibak,Patronage,resolved,Mohammad Al Zaibak,1.0,Member of the Board of Governors,Ryerson University,2016,Mohammad Al Zaibak,1.0,Ontario Liberal Party,0.0,2021-2021,https://www.cbc.ca/news/politics/senate-appointments-liberals-1.7260664
+GC014,Réjean Aucoin,Patronage,appointee-only,Réjean Aucoin,1.0,Part-Time Member,"National Parole Board, Atlantic Regional Division",,,0.689,,,,https://www.cbc.ca/news/politics/senate-appointments-liberals-1.7260664
+GC015,Marnie McBean,Patronage,unresolved,,0.638,,,,,0.675,,,,https://www.cbc.ca/news/politics/senate-appointments-liberals-1.7260664

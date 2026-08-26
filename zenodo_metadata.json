@@ -1,0 +1,41 @@
+{
+  "_comment": [
+    "Template for the Zenodo record that hosts the raw corpus (ijf-datasets/).",
+    "Paste these values into the Zenodo upload form, or POST them to the",
+    "Zenodo REST API as the 'metadata' object. Fill in the TODOs before",
+    "publishing. See README.md > Publishing the data to Zenodo."
+  ],
+  "metadata": {
+    "title": "IJF Link Discovery: Canadian donations, appointments, lobbying, and procurement corpus",
+    "upload_type": "dataset",
+    "description": "Raw CSV corpus underpinning the IJF link-discovery experiments: political donations, government appointments, lobbying registrations, procurement records, and charity metadata for Canadian federal and provincial jurisdictions. 15 tables, approximately 6 GB uncompressed. The cleaned layer and the notebook samples are not distributed here; they are reproducible from this raw corpus using pipeline/clean_datasets.py and scripts/make_samples.py in the accompanying code repository. SHA-256 checksums for every file are published as checksums.sha256 in that repository.",
+    "creators": [
+      {
+        "name": "TODO: Lastname, Firstname",
+        "affiliation": "TODO: institution",
+        "orcid": "TODO: 0000-0000-0000-0000"
+      }
+    ],
+    "license": "TODO: confirm redistribution terms of each source before choosing (e.g. cc-by-4.0)",
+    "access_right": "open",
+    "keywords": [
+      "entity resolution",
+      "link discovery",
+      "record linkage",
+      "political donations",
+      "government appointments",
+      "lobbying",
+      "public procurement",
+      "open government data",
+      "Canada"
+    ],
+    "related_identifiers": [
+      {
+        "identifier": "TODO: code repository URL",
+        "relation": "isSupplementTo",
+        "resource_type": "software"
+      }
+    ],
+    "notes": "Tables: apt.csv (appointments), cha_meta.csv (charity metadata), don_mv.csv (donations), lob_firm.csv, lob_lobbyist.csv, lob_meta.csv, lob_org.csv, lob_rd_mv.csv, lob_target.csv (lobbying), pro_award.csv, pro_contact.csv, pro_supplier.csv, pro_tender.csv (procurement), rep_meta.csv, rep_target.csv (reporting)."
+  }
+}

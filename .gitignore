@@ -1,0 +1,28 @@
+# ---- Data. Never committed; distributed via Zenodo, see README ----
+ijf-datasets/
+ijf-clean/
+data/
+*.csv.gz
+*.parquet
+
+# ---- Generated artifacts. Rebuilt by the pipeline ----
+work/
+*.pkl
+
+# ---- LaTeX build junk ----
+*.aux
+*.log
+*.out
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+
+# ---- OS and Python ----
+.DS_Store
+Thumbs.db
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
