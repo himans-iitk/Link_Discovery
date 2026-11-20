@@ -24,7 +24,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import ijf_config as cfg  # noqa: E402
+from pipeline import paths as cfg  # noqa: E402
 
 # Free-text / full-text-search columns: never read by the notebooks, and they
 # dominate on-disk size.

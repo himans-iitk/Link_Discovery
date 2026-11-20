@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
-"""
-General profile of the cleaned layer.
+"""Profile the cleaned layer: entity counts, blocking cost, and coverage.
 
-Answers three questions the method design depends on:
-  1. How big is the problem really, after normalisation?  (entities, not rows)
-  2. What does blocking cost, and where does it blow up?   (block-size tails)
-  3. What is the data actually missing?                    (per-gate coverage)
+    python3 -m pipeline.profile_clean [out.json]   # default work/profile_clean.json
 """
 import csv, json, os, sys
 from collections import Counter
 
-CLEAN = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__)))), "ijf-clean")
+from pipeline import paths
+
+CLEAN = paths.CLEAN
 csv.field_size_limit(10**9)
 
 
@@ -122,8 +119,10 @@ def main():
             out["overlap"][f"{a} | {b}"] = dict(
                 shared_entities=len(shared), record_pairs=rp)
 
-    json.dump(out, open(sys.argv[1] if len(sys.argv) > 1
-                        else "/tmp/profile.json", "w"), indent=2)
+    dest = sys.argv[1] if len(sys.argv) > 1 else paths.WORK / "profile_clean.json"
+    os.makedirs(os.path.dirname(dest) or ".", exist_ok=True)
+    with open(dest, "w") as fh:
+        json.dump(out, fh, indent=2)
     print(json.dumps({k: v for k, v in out.items() if k != "overlap"}, indent=2))
     print("\n--- overlap (top 20 by record pairs) ---")
     for k, v in sorted(out["overlap"].items(),

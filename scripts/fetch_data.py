@@ -24,7 +24,7 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import ijf_config as cfg  # noqa: E402
+from pipeline import paths as cfg  # noqa: E402
 
 ZENODO_RECORD = os.environ.get("IJF_ZENODO_RECORD", "")
 API = "https://zenodo.org/api/records/{record}"
@@ -111,7 +111,7 @@ def main() -> int:
 
     print("\ndone. Next:")
     print("  python scripts/checksums.py verify")
-    print("  python pipeline/clean_datasets.py")
+    print("  python -m pipeline.clean_datasets")
     print("  python scripts/make_samples.py")
     return 0
 

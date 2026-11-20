@@ -17,9 +17,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import ijf_config as cfg  # noqa: E402
+from pipeline import paths as cfg  # noqa: E402
 
-MANIFEST = cfg.REPO_ROOT / "checksums.sha256"
+MANIFEST = cfg.REPO / "checksums.sha256"
 BUF = 8 << 20  # 8 MiB
 
 

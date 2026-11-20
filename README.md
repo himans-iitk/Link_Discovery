@@ -1,168 +1,113 @@
 # IJF Link Discovery
 
-Discovering typed, temporally-ordered influence links across Canadian civic
-databases: political donations, government appointments, lobbying
-registrations, procurement records, and charity metadata.
+Finds typed, time-ordered influence links across Canadian civic databases
+(donations, appointments, lobbying, procurement, charities) for investigative
+reporters. Output is a ranked list of leads, not asserted fact.
 
-The shipped pipeline targets one motif, **FAV 13**: a company lobbies a
-federal department, and that same department later awards it a contract. Every
-scored candidate carries the evidence that produced its score, so a journalist
-can read the reasoning rather than trust a number.
+The shipped pipeline targets one motif, **FAV 13**: a company lobbies a federal
+department, and that department later awards it a contract. Every score
+decomposes into named evidence a reporter can check.
 
-**Code lives in git. Data does not.** The corpus is ~6 GB raw / ~9 GB cleaned,
-so it is distributed via Zenodo and reassembled locally.
-
----
+Pure Python 3.11 standard library (runs on a cluster login node). Only
+`scripts/make_samples.py` needs pandas/numpy.
 
 ## Layout
 
 ```
 LinkDiscovery/
-├── link_discovery_repo/     <- this repo
-│   ├── ijf_config.py            data paths for the cleaning layer
+├── link_discovery_repo/          this repo
 │   ├── pipeline/
-│   │   ├── clean_datasets.py    raw -> cleaned layer
-│   │   ├── profile_clean.py     profile of the cleaned layer
-│   │   └── fav13/               the FAV 13 pipeline (see below)
-│   ├── ground_truth/            published cases, negatives, perturbations
-│   ├── reference/               curated lookup tables (body_map, parties)
-│   ├── docs/                    method PDFs and result workbooks
-│   └── scripts/                 fetch, sample, checksum
-├── ijf-datasets/            raw corpus       (~6 GB, gitignored)
-├── ijf-clean/               cleaned corpus   (~9 GB, gitignored)
-└── work/                    pipeline artifacts (gitignored)
+│   │   ├── paths.py              every path, in one place
+│   │   ├── clean_datasets.py     raw -> ijf-clean/
+│   │   ├── profile_clean.py      profile of the cleaned layer
+│   │   └── fav13/
+│   │       ├── __main__.py       runs all stages in order
+│   │       ├── config.py         parameters (load-bearing vs free)
+│   │       ├── common.py         shared readers and helpers
+│   │       ├── data/             entities, evidence, body map, cache build
+│   │       ├── score/            v1 company, award-level, v2 (main), v3 learned
+│   │       ├── evaluate/         rank tests, story hits, dossier, negatives
+│   │       └── report/           LaTeX and xlsx into docs/
+│   ├── ground_truth/             published cases, negatives, perturbations
+│   ├── reference/                curated body_map.csv, ruling parties
+│   ├── docs/                     method PDFs and result workbooks
+│   └── scripts/                  fetch, checksum, sample
+├── ijf-datasets/                 raw corpus     (~6 GB, not in git)
+├── ijf-clean/                    cleaned corpus (~9 GB, not in git)
+└── work/                         pipeline outputs (not in git)
 ```
 
-Paths resolve relative to the repo, so it runs from anywhere. Override the
-data root with `IJF_DATA_ROOT`.
+Override the data location with `IJF_DATA_ROOT` (see `pipeline/paths.py`).
 
----
+## Running
 
-## Running it
-
-Everything runs as a module from this directory. No third-party packages: the
-pipeline is pure Python 3.11 standard library, by design, so it runs on a
-cluster login node with no environment to build.
+From this directory:
 
 ```bash
-python3 scripts/fetch_data.py          # 1. raw corpus from Zenodo (~6 GB)
-python3 scripts/checksums.py verify    # 2. confirm the download
-python3 -m pipeline.clean_datasets     # 3. build ijf-clean/  (~9 GB, slow)
-
-python3 -m pipeline.fav13.run --build  # 4. entity + evidence caches
-python3 -m pipeline.fav13.score_v2     # 5. score every award-level motif
-python3 -m pipeline.fav13.evaluate_v2  # 6. rank test against known cases
+python3 scripts/fetch_data.py           # 1. raw corpus from Zenodo
+python3 scripts/checksums.py verify     # 2. check the download
+python3 -m pipeline.clean_datasets      # 3. build ijf-clean/ (slow)
+python3 -m pipeline.fav13               # 4. every FAV 13 stage, in order
 ```
 
-Step 5 writes `work/fav13_v2_scored.pkl` (~386 MB, 1.5 M motifs). Every module
-after it reads that file.
+Run one stage with `python3 -m pipeline.fav13 v2 rank_v2`, list them with
+`--list`, or run a module directly (`python3 -m pipeline.fav13.score.v2`).
 
----
+## Flow
 
-## The `fav13` modules
+| Stage | Module | Writes (to `work/` unless noted) |
+|---|---|---|
+| **data** | `data.build` | `entities.pkl`, `evidence.pkl` |
+| | `data.body_map` | `reference/body_map.csv` (rebuild only when re-curating) |
+| **score** | `score.company` | v1 company-level baseline + Arm C (prints) |
+| | `score.awards` | `fav13_awards_topk.csv` (award-level weighted sum) |
+| | `score.bodycond` | `bodycond.pkl` (body-conditioned test) |
+| | **`score.v2`** | **`fav13_v2_scored.pkl`**, `fav13_v2_top.csv`, the main scorer |
+| | `score.v3`, `score.v3_ablation` | `v3_top.json`, `v3b_results.json` (learned; slow) |
+| **evaluate** | `evaluate.rank_v1`, `evaluate.rank_v2` | rank tests vs published cases (prints) |
+| | `evaluate.hits`, `evaluate.dossier` | `hits.json`, `dossier.json` |
+| | `evaluate.gt_motifs` | `gt_motifs_positive.csv`, `docs/gt_motifs_and_negatives.xlsx` |
+| | `evaluate.negatives [rules\|within\|permuted\|all]` | `favoritism_negatives*.csv` |
+| **report** | `report.render_hits`, `report.render_dossier` | `docs/hits.tex`, `docs/ground_truth_cases.tex` |
+| | `report.models_xlsx` | `docs/favouritism_models.xlsx` |
 
-**Data layer**
+Everything after `score.v2` reads `fav13_v2_scored.pkl` (~386 MB, 1.5 M contracts).
 
-| Module | Role |
-|---|---|
-| `config.py` | load-bearing vs free parameters, kept separate on purpose |
-| `entities.py` | name normalisation and entity resolution; the only inference in the pipeline |
-| `evidence.py` | per-entity lobbying and award calendars, plus the national null reference |
-| `body_map.py` | 253 curated lobbying-target to procurement-department mappings |
+### How v2 scores a contract
 
-**Scoring**
-
-| Module | Role |
-|---|---|
-| `features.py` | v1 company-level features and the Poisson-binomial null |
-| `awards.py` | award-level motif construction (one award = one motif) |
-| `score_v2.py` | the current scorer: four calibrated components, Brown-combined, BH-corrected |
-| `bodycond.py` | body-conditioned temporal excess test |
-| `rank.py` | Fagin threshold algorithm, brute force, Spearman, baselines |
-| `run.py` | cache bootstrap; company-level baseline retained for Arm C |
-
-**Learned variants**
-
-| Module | Role |
-|---|---|
-| `v3.py` | hand-rolled monotone gradient boosting; monotonicity is what keeps TA valid |
-| `v3b.py` | three-variant ablation, four baselines, leave-one-company-out |
-
-**Evaluation and output**
-
-| Module | Role |
-|---|---|
-| `eval_rank.py` | Mann-Whitney rank test (AUC) against the published cases |
-| `evaluate_v2.py` | v2 hit positions against `favoritism_ca.csv` |
-| `hits.py`, `dossier.py` | per-case evidence extraction |
-| `gt_motifs.py` | ground-truth motif completion and the six perturbation sheets |
-| `negatives.py` | rule-based, within-company, and permutation negatives |
-| `render_hits.py`, `render_dossier.py` | LaTeX output into `docs/` |
-| `report_xlsx.py`, `xlsx.py` | workbooks; `xlsx.py` is a minimal OOXML writer |
-
----
+One row per contract. Only lobbying of the *buying* department counts. Four
+p-values, each against its own null (timing, sole-source rate, tender window,
+supplier dominance), combined with Brown's method, then
+`score = identity gate × (1 − p) × salience`, with BH q-values.
 
 ## Design commitments
 
-These are constraints, not preferences. They shape what is in the repo.
-
-- **Entity resolution is the only place inference happens.** All 16 link cases
-  are `sameAs` assertions. Once entities are fixed, everything downstream is
+- **Entity resolution is the only inference.** Everything after it is
   arithmetic on observed records.
-- **Precision over recall.** A false positive here is a defamatory accusation.
-- **No black box in the scored path.** Scores decompose into named components
-  a journalist can be walked through. The learned variant in `v3.py` is
-  monotone by construction and reports its stumps.
-- **Monotone aggregation with non-negative weights.** This is the precondition
-  for Fagin's threshold algorithm and the early termination it buys. A term
-  that can go negative breaks the guarantee.
-- **The cleaning layer is additive and deterministic.** It never modifies a raw
-  value, never drops a row, and adds no inference. One exception,
-  `recipient_kind`, is flagged in the code.
-
----
+- **Precision over recall.** A false positive is a defamatory accusation.
+- **No black box in the scored path.** Scores decompose into named components.
+- **Monotone, non-negative aggregation**, the precondition for Fagin's
+  threshold algorithm.
+- **The cleaning layer is additive and deterministic**: never edits a raw
+  value, never drops a row (one flagged exception, `recipient_kind`).
 
 ## Ground truth
 
-`ground_truth/favoritism_ca.csv` holds published cases, not labels. It is
-positive-only, and the positives were selected by *being newsworthy enough to
-publish*, which breaks the SCAR assumption a PU learner needs. With three
-complete cases it cannot train a classifier. It supports a rank test, which is
-what `eval_rank.py` reports.
-
-The negatives are constructed, and each row says how:
-
-- `favoritism_negatives.csv` — rule-based, 7 categories
-- `favoritism_negatives_within.csv` — within-company controls
-- `favoritism_negatives_permuted.csv` — permutation nulls
-- `gt_perturbations/T1..T6` — one sheet per perturbation of a true motif
-
----
+`ground_truth/favoritism_ca.csv` holds published stories, not labels: positive
+only and selected for newsworthiness, so it supports a rank test, not a
+classifier. Negatives are constructed and each row says how
+(`favoritism_negatives*.csv`, `gt_perturbations/T1..T6`).
 
 ## Data distribution
 
-Only the raw corpus is distributed. `ijf-clean/` is derived, which halves the
-download and makes cleaning reproducible rather than an opaque blob:
-
-```
-Zenodo -> ijf-datasets/ -> [clean_datasets.py] -> ijf-clean/
-```
-
-To publish a new corpus version: upload to Zenodo, note the record id from the
-URL, set `ZENODO_RECORD` in `scripts/fetch_data.py` (or export
-`IJF_ZENODO_RECORD`), then regenerate the manifest with
+Only the raw corpus is distributed (Zenodo); `ijf-clean/` is rebuilt locally.
+To publish a new version: upload to Zenodo, set `IJF_ZENODO_RECORD`, then
 `python3 scripts/checksums.py write`.
-
-Git LFS is the wrong tool at this size: GitHub's free tier gives 1 GB of
-storage and 1 GB of monthly bandwidth, LFS stores every version of a rewritten
-CSV whole, and every clone pulls the data whether or not it is wanted.
-
----
 
 ## Working agreements
 
-- Never commit CSVs outside `ground_truth/` and `reference/`. `.gitignore`
-  covers the data directories; check `git status` anyway.
-- Never hardcode paths. Import from `pipeline.fav13.config` or `ijf_config`.
-- Never tune a load-bearing parameter to improve a result. The split in
-  `config.py` exists to make that visible.
+- Never commit CSVs outside `ground_truth/` and `reference/`.
+- Never hardcode paths; use `pipeline.paths`.
+- Never tune a load-bearing parameter to improve a result (`fav13/config.py`).
+- `reference/body_map.csv` has a hand-curated `approved` column; rebuilding it
+  overwrites those approvals.

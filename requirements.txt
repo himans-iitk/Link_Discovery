@@ -1,15 +1,9 @@
-# The pipeline has no third-party dependencies.
+# pipeline/ is pure Python 3.11 standard library, by design: it must run on a
+# cluster login node with no environment to build. Hence the hand-rolled
+# boosting (score/v3.py), xlsx writer (report/xlsx.py) and threshold algorithm.
 #
-# Everything under pipeline/ is pure Python 3.11 standard library, by design:
-# it has to run on a Compute Canada login node with no environment to build
-# and no network for pip. That constraint is why the repo hand-rolls a few
-# things that would normally be imported --
+# Only scripts/make_samples.py (notebook samples) needs these:
+pandas
+numpy
 #
-#   pipeline/fav13/v3.py     monotone gradient boosting (no xgboost)
-#   pipeline/fav13/xlsx.py   minimal OOXML writer      (no openpyxl)
-#   pipeline/fav13/rank.py   threshold algorithm       (not in Postgres)
-#
-# Python 3.11 or newer is the only requirement.
-#
-# Rendering docs/*.tex additionally needs a LaTeX toolchain (pdflatex or
-# xelatex) with tikz. That is optional; the PDFs are committed.
+# Optional: pdflatex with tikz to rebuild docs/*.pdf (the PDFs are committed).

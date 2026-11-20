@@ -1,47 +1,32 @@
-#!/usr/bin/env python3
-"""
-Deterministic cleaning layer for the IJF link-discovery datasets.
+"""Deterministic cleaning layer: ijf-datasets/ -> ijf-clean/.
 
-Contract
---------
-1. RAW IS NEVER MODIFIED.  Output goes to a sibling directory.
-2. ADDITIVE ONLY.  Every raw column is preserved (except `fts`, a Postgres
-   tsvector that is purely derived).  Cleaned values are appended as new
-   columns suffixed `_clean` / `_status` / etc.
-3. ROW-PRESERVING.  Output has the same number of rows, in the same order,
-   with the same keys, as the input.  No dedup, no merging.
-4. DETERMINISTIC ONLY.  Nothing here decides that two records are the same
-   real-world entity.  Consolidation and linking are method, not cleaning.
-   The single deliberate exception is `recipient_kind` on donations, which
-   is an inference; it is flagged as such and carries an `unknown` state.
+Contract (each rule is load-bearing):
+  1. Raw is never modified.
+  2. Additive only: every raw column kept (except `fts`, a derived tsvector);
+     cleaned values are appended as new columns.
+  3. Row-preserving: same rows, order and keys. No dedup, no merging.
+  4. Deterministic only: nothing here decides two records are one entity.
+     Sole exception: `recipient_kind` on donations, an inference with an
+     `unknown` state.
 
-Name handling
--------------
-No single canonical name form is imposed, because the choice is
-consequential: collapsing middle initials raises apt<->don candidate
-overlap by ~27%, and that increment is disproportionately false.  Several
-forms are emitted side by side so the method layer can choose per case.
+Names: several forms are emitted, not one canonical form (collapsing middle
+initials adds ~27% mostly-false apt<->don candidates).
+Dates: four states (valid / missing / unparseable / out_of_range), because
+"no date" means order unknown while "bad date" means order violated.
 
-Date handling
--------------
-Dates resolve to one of four states, never silently to NULL.  The
-distinction between "no date" and "unparseable date" is what separates
-"order unknown" from "order violated" downstream.
+    python3 -m pipeline.clean_datasets [table.csv ...]
 """
 
-import csv, json, os, re, sys, unicodedata
+import csv, json, os, sys, unicodedata, re
 from collections import Counter
 
-RAW = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__)))), "ijf-datasets")
-OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__)))), "ijf-clean")
+from pipeline import paths
+
+RAW, OUT = paths.RAW, paths.CLEAN
 
 csv.field_size_limit(10**9)
 
-# --------------------------------------------------------------------------
-# name normalisation
-# --------------------------------------------------------------------------
+# ---------------------------------------------------------------- names
 
 TITLES = {"mr", "mrs", "ms", "miss", "dr", "prof", "hon", "honourable", "rt",
           "sen", "sir", "madam", "me", "mme", "m"}
@@ -61,21 +46,15 @@ def ascii_fold(s):
 
 
 def _tokens(s, join_intraword):
-    """Tokenise a folded name.
+    """Tokenise a folded name, dropping leading titles and trailing suffixes.
 
-    Hyphens and apostrophes are intra-word connectors in ~3% of Canadian
-    names ("Southern-Heathcott", "O'Hara").  Splitting on them silently
-    truncates compound surnames -- "Linda Southern-Heathcott" would block
-    as "linda heathcott".  Neither policy dominates: a source that writes
-    the surname spaced will only match the split form.  We therefore emit
-    both and let blocking union them.
+    Hyphens/apostrophes are intra-word in ~3% of names (Southern-Heathcott,
+    O'Hara) and neither joining nor splitting dominates, so callers emit both.
     """
     s = ascii_fold(s)
     s = re.sub(r"['’ʼ-]", "" if join_intraword else " ", s)
     s = re.sub(r"[^a-z ]", " ", s)
     toks = [t for t in re.sub(r"\s+", " ", s).strip().split() if t]
-    # strip leading titles and trailing suffixes so they never become the
-    # "last name" -- e.g. "Seeon Smith Ii" must reduce to "seeon smith"
     while toks and toks[0] in TITLES:
         toks.pop(0)
     while toks and toks[-1] in SUFFIXES:
@@ -96,11 +75,7 @@ def name_forms(raw):
 
 
 def org_forms(raw):
-    """Return (lower, core, alt_core) for an organisation name.
-
-    Bilingual registry names of the form "English / Francais" are split and
-    BOTH halves are emitted -- picking one arbitrarily loses real matches.
-    """
+    """-> (lower, core, alt_core). Bilingual "English / Francais" names emit both halves."""
     lower = re.sub(r"\s+", " ", (raw or "").strip().lower())
     parts = [p.strip() for p in lower.split("/") if p.strip()]
     if not parts:
@@ -121,9 +96,7 @@ def org_forms(raw):
     return lower, primary, alt
 
 
-# --------------------------------------------------------------------------
-# date normalisation
-# --------------------------------------------------------------------------
+# ---------------------------------------------------------------- dates
 
 MONTHS = {m: i + 1 for i, m in enumerate(
     ["january", "february", "march", "april", "may", "june", "july", "august",
@@ -172,9 +145,7 @@ def clean_date(raw):
     return f"{y:04d}-{mo:02d}-{d:02d}", "valid"
 
 
-# --------------------------------------------------------------------------
-# jurisdiction harmonisation
-# --------------------------------------------------------------------------
+# ---------------------------------------------------------------- jurisdictions
 
 JUR = {}
 for code, names in {
@@ -202,9 +173,7 @@ def clean_jur(raw):
     return "", "unmapped"
 
 
-# --------------------------------------------------------------------------
-# donation recipient typing  (the one deliberate inference in this layer)
-# --------------------------------------------------------------------------
+# ---------------------------------------------------------------- donation recipient (the one inference)
 
 PERSON_PE = {"candidate", "candidates", "leadership contestant",
              "leadership contestants", "nomination contestant",
@@ -229,11 +198,8 @@ def recipient_kind(pe):
     return "unknown"
 
 
-# --------------------------------------------------------------------------
-# per-table specifications
-# --------------------------------------------------------------------------
-# person: [(src, prefix)]   org: [(src, prefix)]
-# date:   [(src, prefix)]   jur:  [(src, prefix)]
+# ---------------------------------------------------------------- per-table spec
+# kind -> [(source column, output prefix)]
 
 SPEC = {
     "apt.csv":            dict(person=[("name", "name")],
